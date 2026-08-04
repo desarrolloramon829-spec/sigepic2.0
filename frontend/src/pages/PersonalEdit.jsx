@@ -70,6 +70,7 @@ const personalSchema = z.object({
   poseeCredencialPolicial: z.string().optional(),
   altaReparticion: z.string().optional(),
   altaDepartamental: z.string().optional(),
+  fechaRetiro: z.string().optional(),
   poseeChalecoAsignado: z.string().optional(),
   nroSerieChalecoAsignado: z.string().optional(),
   observaciones: z.string().optional(),
@@ -190,6 +191,7 @@ const PersonalEdit = () => {
         poseeCredencialPolicial: personal.poseeCredencialPolicial ? 'SI' : 'NO',
         altaReparticion: personal.altaReparticion || '',
         altaDepartamental: personal.altaDepartamental || '',
+        fechaRetiro: personal.fechaRetiro || '',
         poseeChalecoAsignado: personal.poseeChalecoAsignado ? 'SI' : 'NO',
         nroSerieChalecoAsignado: personal.nroSerieChalecoAsignado || '',
       });
@@ -711,6 +713,27 @@ const PersonalEdit = () => {
                     placeholder="Ciudad o localidad"
                   />
                 </div>
+
+                <div>
+                  <Label htmlFor="jurisdiccion">Jurisdicción</Label>
+                  <Input id="jurisdiccion" {...register('jurisdiccion')} />
+                </div>
+
+                <div>
+                  <Label htmlFor="regional">Regional</Label>
+                  <select
+                    id="regional"
+                    {...register('regional')}
+                    className="w-full px-3 py-2 border rounded-md bg-background"
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="CAPITAL">Capital</option>
+                    <option value="NORTE">Norte</option>
+                    <option value="SUR">Sur</option>
+                    <option value="ESTE">Este</option>
+                    <option value="OESTE">Oeste</option>
+                  </select>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
@@ -826,26 +849,6 @@ const PersonalEdit = () => {
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="jurisdiccion">Jurisdicción</Label>
-                  <Input id="jurisdiccion" {...register('jurisdiccion')} />
-                </div>
-
-                <div>
-                  <Label htmlFor="regional">Regional</Label>
-                  <select
-                    id="regional"
-                    {...register('regional')}
-                    className="w-full px-3 py-2 border rounded-md bg-background"
-                  >
-                    <option value="">Seleccionar...</option>
-                    <option value="CAPITAL">Capital</option>
-                    <option value="NORTE">Norte</option>
-                    <option value="SUR">Sur</option>
-                    <option value="ESTE">Este</option>
-                    <option value="OESTE">Oeste</option>
-                  </select>
-                </div>
 
                 <div>
                   <Label htmlFor="subsidioSalud">Subsidio de Salud</Label>
@@ -1187,6 +1190,26 @@ const PersonalEdit = () => {
                     type="date"
                     {...register('altaDepartamental')}
                   />
+                </div>
+
+                <div>
+                  <Label htmlFor="fechaRetiro">Fecha de Retiro</Label>
+                  <Input
+                    id="fechaRetiro"
+                    type="date"
+                    disabled={!!personal?.fechaRetiro}
+                    {...register('fechaRetiro')}
+                    className={
+                      personal?.fechaRetiro
+                        ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed'
+                        : ''
+                    }
+                  />
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                    {personal?.fechaRetiro
+                      ? 'Este dato ya fue registrado y no puede modificarse.'
+                      : 'Este dato solo puede cargarse una vez; una vez guardado no podrá modificarse.'}
+                  </p>
                 </div>
 
                 <div className="md:col-span-2 lg:col-span-3">

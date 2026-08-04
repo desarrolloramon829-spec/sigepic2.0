@@ -9,6 +9,10 @@ import PersonalSearch from './pages/PersonalSearch';
 import PersonalEdit from './pages/PersonalEdit';
 import PersonalDetail from './pages/PersonalDetail';
 import PersonalLicencias from './pages/PersonalLicencias';
+import PersonalNotasMedicas from './pages/PersonalNotasMedicas';
+import PersonalCapacitaciones from './pages/PersonalCapacitaciones';
+import PersonalSanciones from './pages/PersonalSanciones';
+import PersonalAscensos from './pages/PersonalAscensos';
 import './styles/index.css';
 
 import { ThemeProvider } from './context/ThemeContext';
@@ -79,6 +83,38 @@ function App() {
               element={
                 <ProtectedRoute>
                   <PersonalLicencias />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/personal/:id/notas-medicas"
+              element={
+                <ProtectedRoute>
+                  <PersonalNotasMedicas />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/personal/:id/capacitaciones"
+              element={
+                <ProtectedRoute>
+                  <PersonalCapacitaciones />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/personal/:id/sanciones"
+              element={
+                <ProtectedRoute>
+                  <PersonalSanciones />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/personal/:id/ascensos"
+              element={
+                <ProtectedRoute>
+                  <PersonalAscensos />
                 </ProtectedRoute>
               }
             />

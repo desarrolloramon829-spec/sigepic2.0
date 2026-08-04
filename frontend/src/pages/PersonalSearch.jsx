@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Search,
-  Download,
   ArrowLeft,
   Filter,
   X,
@@ -15,6 +14,10 @@ import {
   SortDesc,
   ChevronRight,
   ClipboardList,
+  Stethoscope,
+  GraduationCap,
+  ShieldAlert,
+  ListChecks,
 } from 'lucide-react';
 import { personalService } from '../services/personal.service';
 import { Button } from '../components/ui/button';
@@ -26,11 +29,100 @@ import {
   CardHeader,
   CardTitle,
 } from '../components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from '../components/ui/dialog';
 import Loading from '../components/common/Loading';
+
+const GRUPOS_CAMPOS_PLANILLA = [
+  {
+    grupo: 'Fotografía',
+    items: [{ key: 'foto', label: 'Fotografía' }],
+  },
+  {
+    grupo: 'Datos Personales',
+    items: [
+      { key: 'apellidoNombre', label: 'Apellido y Nombre' },
+      { key: 'dni', label: 'DNI' },
+      { key: 'cuil', label: 'CUIT/CUIL' },
+      { key: 'sexo', label: 'Sexo' },
+      { key: 'fechaNacimiento', label: 'Fecha de Nacimiento' },
+      { key: 'estadoCivil', label: 'Estado Civil' },
+      { key: 'nacionalidad', label: 'Nacionalidad' },
+      { key: 'grupoSanguineo', label: 'Grupo Sanguíneo' },
+      { key: 'email', label: 'Email' },
+      { key: 'domicilio', label: 'Domicilio' },
+      { key: 'localidad', label: 'Localidad' },
+      { key: 'domicilioAlternativo', label: 'Domicilio Alternativo' },
+      { key: 'telefonoPersonal', label: 'Teléfono Personal' },
+      { key: 'telefonoAlternativo', label: 'Teléfono Alternativo' },
+      { key: 'contactosAdicionales', label: 'Contactos Adicionales' },
+    ],
+  },
+  {
+    grupo: 'Datos Laborales',
+    items: [
+      { key: 'tipoPersonal', label: 'Tipo de Personal' },
+      { key: 'estadoServicio', label: 'Estado de Servicio' },
+      { key: 'jerarquia', label: 'Jerarquía' },
+      { key: 'legajo', label: 'Legajo Personal' },
+      { key: 'cargo', label: 'Cargo' },
+      { key: 'numeroCargo', label: 'N° de Cargo' },
+      { key: 'seccion', label: 'División/Sección' },
+      { key: 'funcionDepto', label: 'Función en Departamento' },
+      { key: 'horarioLaboral', label: 'Horario Laboral' },
+      { key: 'profesion', label: 'Profesión' },
+      { key: 'prontuario', label: 'N° de Prontuario' },
+      { key: 'jurisdiccion', label: 'Jurisdicción' },
+      { key: 'regional', label: 'Regional' },
+      { key: 'subsidioSalud', label: 'Subsidio de Salud' },
+      { key: 'diasLicenciaAnuales', label: 'Días de Licencia Anuales' },
+      { key: 'altaReparticion', label: 'Alta de Repartición' },
+      { key: 'altaDepartamental', label: 'Alta Departamental' },
+      { key: 'fechaRetiro', label: 'Fecha de Retiro' },
+      { key: 'motivoBaja', label: 'Motivo de Baja' },
+    ],
+  },
+  {
+    grupo: 'Equipamiento y Otros',
+    items: [
+      { key: 'carnetManejo', label: 'Carnet de Manejo' },
+      { key: 'conduce', label: 'Conduce (Autos/Motos/Otros)' },
+      { key: 'poseeCredencialPolicial', label: 'Credencial Policial' },
+      { key: 'chaleco', label: 'Chaleco Provisto' },
+      { key: 'arma', label: 'Arma Provista' },
+      { key: 'observaciones', label: 'Observaciones' },
+    ],
+  },
+  {
+    grupo: 'Historial',
+    items: [
+      { key: 'licencias', label: 'Licencias' },
+      { key: 'notasMedicas', label: 'Notas Médicas Policiales' },
+      { key: 'capacitaciones', label: 'Capacitaciones' },
+      { key: 'sanciones', label: 'Sanciones' },
+      { key: 'ascensos', label: 'Ascensos' },
+    ],
+  },
+];
+
+const camposPlanillaPorDefecto = () => {
+  const campos = {};
+  GRUPOS_CAMPOS_PLANILLA.forEach(g =>
+    g.items.forEach(item => {
+      campos[item.key] = true;
+    })
+  );
+  return campos;
+};
 
 const PersonalSearch = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
   const [searching, setSearching] = useState(false);
   const [resultados, setResultados] = useState([]);
   const [seleccionados, setSeleccionados] = useState([]);
@@ -40,6 +132,15 @@ const PersonalSearch = () => {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
+
+  // Modal de selección de campos para la planilla
+  const [showPlanillaModal, setShowPlanillaModal] = useState(false);
+  const [planillaIds, setPlanillaIds] = useState([]);
+  const [planillaNombreArchivo, setPlanillaNombreArchivo] = useState('');
+  const [camposPlanilla, setCamposPlanilla] = useState(
+    camposPlanillaPorDefecto()
+  );
+  const [generandoPlanilla, setGenerandoPlanilla] = useState(false);
 
   // Jerarquías y secciones estáticas
   const jerarquiasSuperiores = [
@@ -87,6 +188,10 @@ const PersonalSearch = () => {
     sexo: '',
     estadoCivil: '',
     grupoSanguineo: '',
+    conNotaMedica: '',
+    conCapacitaciones: '',
+    conSanciones: '',
+    conFechaRetiro: '',
   });
 
   const handleBuscar = async (resetPage = true) => {
@@ -132,6 +237,10 @@ const PersonalSearch = () => {
       sexo: '',
       estadoCivil: '',
       grupoSanguineo: '',
+      conNotaMedica: '',
+      conCapacitaciones: '',
+      conSanciones: '',
+      conFechaRetiro: '',
     });
     setResultados([]);
     setSeleccionados([]);
@@ -161,24 +270,37 @@ const PersonalSearch = () => {
     }
   };
 
-  const handleEstadoChange = async (personalId, nuevoEstado) => {
-    try {
-      await personalService.actualizar(personalId, { estadoServicio: nuevoEstado });
-      setResultados(prev =>
-        prev.map(p => p.id === personalId ? { ...p, estadoServicio: nuevoEstado } : p)
-      );
-    } catch (err) {
-      alert('Error al actualizar el estado');
-    }
-  };
-
-  const handleDescargarPlanillas = async () => {
+  const handleDescargarPlanillas = () => {
     if (seleccionados.length === 0) {
       alert('Seleccione al menos un personal');
       return;
     }
+    abrirModalPlanilla(seleccionados, `planillas-personal-${Date.now()}.pdf`);
+  };
 
-    setLoading(true);
+  const abrirModalPlanilla = (ids, nombreArchivo) => {
+    setPlanillaIds(ids);
+    setPlanillaNombreArchivo(nombreArchivo);
+    setCamposPlanilla(camposPlanillaPorDefecto());
+    setShowPlanillaModal(true);
+  };
+
+  const toggleCampoPlanilla = key => {
+    setCamposPlanilla(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleTodosCamposPlanilla = valor => {
+    const campos = {};
+    GRUPOS_CAMPOS_PLANILLA.forEach(g =>
+      g.items.forEach(item => {
+        campos[item.key] = valor;
+      })
+    );
+    setCamposPlanilla(campos);
+  };
+
+  const confirmarGenerarPlanilla = async () => {
+    setGenerandoPlanilla(true);
     try {
       const response = await fetch('/api/personal/planillas', {
         method: 'POST',
@@ -186,25 +308,26 @@ const PersonalSearch = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-        body: JSON.stringify({ ids: seleccionados }),
+        body: JSON.stringify({ ids: planillaIds, campos: camposPlanilla }),
       });
 
-      if (!response.ok) throw new Error('Error al generar planillas');
+      if (!response.ok) throw new Error('Error al generar planilla(s)');
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `planillas-personal-${Date.now()}.pdf`;
+      a.download = planillaNombreArchivo;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      setShowPlanillaModal(false);
     } catch (error) {
-      console.error('Error al descargar planillas:', error);
-      alert('Error al generar las planillas');
+      console.error('Error al generar planilla(s):', error);
+      alert('Error al generar la(s) planilla(s)');
     } finally {
-      setLoading(false);
+      setGenerandoPlanilla(false);
     }
   };
 
@@ -283,21 +406,11 @@ const PersonalSearch = () => {
               >
                 <Button
                   onClick={handleDescargarPlanillas}
-                  disabled={loading}
                   size="lg"
                   className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white shadow-lg"
                 >
-                  {loading ? (
-                    <>
-                      <span className="animate-spin mr-2">⏳</span>
-                      Generando...
-                    </>
-                  ) : (
-                    <>
-                      <FileDown className="w-5 h-5 mr-2" />
-                      Exportar ({seleccionados.length})
-                    </>
-                  )}
+                  <FileDown className="w-5 h-5 mr-2" />
+                  Exportar ({seleccionados.length})
                 </Button>
               </motion.div>
             )}
@@ -537,6 +650,70 @@ const PersonalSearch = () => {
                         <option value="O-">O-</option>
                       </select>
                     </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        Nota Médica Policial
+                      </Label>
+                      <select
+                        name="conNotaMedica"
+                        value={filtros.conNotaMedica}
+                        onChange={handleChange}
+                        className="w-full h-11 px-3 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Todos</option>
+                        <option value="true">Con nota médica</option>
+                        <option value="false">Sin nota médica</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        Capacitaciones
+                      </Label>
+                      <select
+                        name="conCapacitaciones"
+                        value={filtros.conCapacitaciones}
+                        onChange={handleChange}
+                        className="w-full h-11 px-3 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Todos</option>
+                        <option value="true">Con capacitaciones</option>
+                        <option value="false">Sin capacitaciones</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        Sanciones
+                      </Label>
+                      <select
+                        name="conSanciones"
+                        value={filtros.conSanciones}
+                        onChange={handleChange}
+                        className="w-full h-11 px-3 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Todos</option>
+                        <option value="true">Con sanciones</option>
+                        <option value="false">Sin sanciones</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-sm font-semibold text-slate-700 dark:text-slate-300">
+                        Fecha de Retiro
+                      </Label>
+                      <select
+                        name="conFechaRetiro"
+                        value={filtros.conFechaRetiro}
+                        onChange={handleChange}
+                        className="w-full h-11 px-3 border border-slate-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-800 text-sm dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Todos</option>
+                        <option value="true">Con fecha de retiro</option>
+                        <option value="false">Sin fecha de retiro</option>
+                      </select>
+                    </div>
                   </div>
                 </details>
 
@@ -689,19 +866,14 @@ const PersonalSearch = () => {
                         <th className="p-4 text-left font-semibold text-sm text-slate-700 dark:text-slate-300">
                           Sección
                         </th>
-                        <th className="p-4 text-center">
-                          <button
-                            onClick={() => handleSort('estadoServicio')}
-                            className="flex items-center gap-2 font-semibold text-sm text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-slate-100"
-                          >
-                            Estado
-                            {sortField === 'estadoServicio' &&
-                              (sortOrder === 'asc' ? (
-                                <SortAsc className="w-4 h-4" />
-                              ) : (
-                                <SortDesc className="w-4 h-4" />
-                              ))}
-                          </button>
+                        <th className="p-4 text-center font-semibold text-sm text-slate-700 dark:text-slate-300">
+                          Nota Médica
+                        </th>
+                        <th className="p-4 text-center font-semibold text-sm text-slate-700 dark:text-slate-300">
+                          Capacitaciones
+                        </th>
+                        <th className="p-4 text-center font-semibold text-sm text-slate-700 dark:text-slate-300">
+                          Sanciones
                         </th>
                         <th className="p-4 text-center font-semibold text-sm text-slate-700 dark:text-slate-300">
                           Acciones
@@ -807,98 +979,72 @@ const PersonalSearch = () => {
                             )}
                           </td>
                           <td className="p-4 text-center">
-                            <select
-                              value={personal.estadoServicio || ''}
-                              onChange={e => handleEstadoChange(personal.id, e.target.value)}
-                              onClick={e => e.stopPropagation()}
-                              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold border cursor-pointer focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                                personal.estadoServicio === 'ACTIVO'
-                                  ? 'bg-green-100 text-green-700 border-green-200 focus:ring-green-400 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800'
-                                  : personal.estadoServicio === 'RETIRADO'
-                                    ? 'bg-slate-100 text-slate-600 border-slate-300 focus:ring-slate-400 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-600'
-                                    : personal.estadoServicio === 'LICENCIA'
-                                      ? 'bg-yellow-100 text-yellow-700 border-yellow-200 focus:ring-yellow-400 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800'
-                                      : personal.estadoServicio === 'ART'
-                                        ? 'bg-orange-100 text-orange-700 border-orange-200 focus:ring-orange-400 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800'
-                                        : 'bg-slate-100 text-slate-600 border-slate-200'
-                              }`}
-                            >
-                              <option value="ACTIVO">ACTIVO</option>
-                              <option value="RETIRADO">RETIRADO</option>
-                              <option value="LICENCIA">LICENCIA</option>
-                              <option value="ART">ART</option>
-                            </select>
+                            {personal._count?.notasMedicas > 0 ? (
+                              <span
+                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
+                                  personal.notasMedicas?.[0]?.aptitud ===
+                                  'APTO'
+                                    ? 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800'
+                                    : personal.notasMedicas?.[0]?.aptitud ===
+                                        'NO_APTO'
+                                      ? 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800'
+                                      : 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800'
+                                }`}
+                                title={`${personal._count.notasMedicas} nota(s) médica(s)`}
+                              >
+                                {personal.notasMedicas?.[0]?.aptitud ===
+                                'APTO'
+                                  ? 'Apto'
+                                  : personal.notasMedicas?.[0]?.aptitud ===
+                                      'NO_APTO'
+                                    ? 'No Apto'
+                                    : 'Con Restricciones'}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400 dark:text-slate-500">
+                                Sin nota
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4 text-center">
+                            {personal._count?.capacitaciones > 0 ? (
+                              <span
+                                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-800"
+                                title={personal.capacitaciones?.[0]?.nombre}
+                              >
+                                {personal._count.capacitaciones}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400 dark:text-slate-500">
+                                -
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4 text-center">
+                            {personal._count?.sanciones > 0 ? (
+                              <span
+                                className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800"
+                                title={personal.sanciones?.[0]?.motivo}
+                              >
+                                {personal._count.sanciones}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400 dark:text-slate-500">
+                                -
+                              </span>
+                            )}
                           </td>
                           <td className="p-4">
                             <div className="flex items-center justify-center gap-2">
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => {
-                                  if (
-                                    personal.archivosAdjuntos &&
-                                    personal.archivosAdjuntos.length > 0
-                                  ) {
-                                    const ultimoArchivo =
-                                      personal.archivosAdjuntos[
-                                        personal.archivosAdjuntos.length - 1
-                                      ];
-                                    window.open(ultimoArchivo.url, '_blank');
-                                  } else {
-                                    alert(
-                                      'Este personal no tiene archivos adjuntos.'
-                                    );
-                                  }
-                                }}
-                                className="h-8 w-8 p-0 hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400"
-                                title="Descargar Adjunto"
-                              >
-                                <Download className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={async () => {
-                                  try {
-                                    const response = await fetch(
-                                      '/api/personal/planillas',
-                                      {
-                                        method: 'POST',
-                                        headers: {
-                                          'Content-Type': 'application/json',
-                                          Authorization: `Bearer ${localStorage.getItem(
-                                            'token'
-                                          )}`,
-                                        },
-                                        body: JSON.stringify({
-                                          ids: [personal.id],
-                                        }),
-                                      }
-                                    );
-
-                                    if (!response.ok)
-                                      throw new Error(
-                                        'Error al generar planilla'
-                                      );
-
-                                    const blob = await response.blob();
-                                    const url =
-                                      window.URL.createObjectURL(blob);
-                                    const a = document.createElement('a');
-                                    a.href = url;
-                                    a.download = `planilla-${personal.apellidos}-${personal.nombres}.pdf`;
-                                    document.body.appendChild(a);
-                                    a.click();
-                                    window.URL.revokeObjectURL(url);
-                                    document.body.removeChild(a);
-                                  } catch (error) {
-                                    console.error(
-                                      'Error al descargar planilla:',
-                                      error
-                                    );
-                                    alert('Error al generar la planilla');
-                                  }
-                                }}
+                                onClick={() =>
+                                  abrirModalPlanilla(
+                                    [personal.id],
+                                    `planilla-${personal.apellidos}-${personal.nombres}.pdf`
+                                  )
+                                }
                                 className="h-8 w-8 p-0 hover:bg-green-100 dark:hover:bg-green-900/30 hover:text-green-600 dark:hover:text-green-400"
                                 title="Generar Planilla"
                               >
@@ -914,6 +1060,43 @@ const PersonalSearch = () => {
                                 title="Licencias"
                               >
                                 <ClipboardList className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  navigate(
+                                    `/personal/${personal.id}/notas-medicas`
+                                  )
+                                }
+                                className="h-8 w-8 p-0 hover:bg-cyan-100 dark:hover:bg-cyan-900/30 hover:text-cyan-600 dark:hover:text-cyan-400"
+                                title="Nota Médica Policial"
+                              >
+                                <Stethoscope className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  navigate(
+                                    `/personal/${personal.id}/capacitaciones`
+                                  )
+                                }
+                                className="h-8 w-8 p-0 hover:bg-blue-100 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400"
+                                title="Capacitaciones"
+                              >
+                                <GraduationCap className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  navigate(`/personal/${personal.id}/sanciones`)
+                                }
+                                className="h-8 w-8 p-0 hover:bg-red-100 dark:hover:bg-red-900/30 hover:text-red-600 dark:hover:text-red-400"
+                                title="Sanciones"
+                              >
+                                <ShieldAlert className="w-4 h-4" />
                               </Button>
                             </div>
                           </td>
@@ -1002,6 +1185,104 @@ const PersonalSearch = () => {
             </div>
           </div>
         )}
+
+        {/* Modal de selección de campos para la planilla */}
+        <Dialog
+          open={showPlanillaModal}
+          onOpenChange={setShowPlanillaModal}
+          size="3xl"
+        >
+          <DialogContent
+            className="dark:bg-slate-900 dark:border dark:border-slate-800"
+            onClose={() => setShowPlanillaModal(false)}
+          >
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 dark:text-slate-100">
+                <ListChecks className="w-5 h-5 text-blue-600" />
+                ¿Qué desea incluir en la planilla?
+              </DialogTitle>
+              <DialogDescription>
+                Seleccione los datos que quiere que se visualicen en la
+                planilla de {planillaIds.length}{' '}
+                {planillaIds.length === 1 ? 'personal' : 'personas'}. Los que
+                no marque no se mostrarán en el PDF.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex justify-end gap-3 mb-2">
+              <button
+                type="button"
+                onClick={() => toggleTodosCamposPlanilla(true)}
+                className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                Marcar todos
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleTodosCamposPlanilla(false)}
+                className="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:underline"
+              >
+                Desmarcar todos
+              </button>
+            </div>
+
+            <div className="space-y-5 max-h-[60vh] overflow-y-auto pr-1">
+              {GRUPOS_CAMPOS_PLANILLA.map(grupo => (
+                <div key={grupo.grupo}>
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 border-b border-slate-200 dark:border-slate-700 pb-1">
+                    {grupo.grupo}
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {grupo.items.map(item => (
+                      <label
+                        key={item.key}
+                        className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!!camposPlanilla[item.key]}
+                          onChange={() => toggleCampoPlanilla(item.key)}
+                          className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500"
+                        />
+                        {item.label}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowPlanillaModal(false)}
+                disabled={generandoPlanilla}
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={confirmarGenerarPlanilla}
+                disabled={
+                  generandoPlanilla ||
+                  !Object.values(camposPlanilla).some(Boolean)
+                }
+                className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white min-w-[160px]"
+              >
+                {generandoPlanilla ? (
+                  <>
+                    <span className="animate-spin mr-2">⏳</span>
+                    Generando...
+                  </>
+                ) : (
+                  <>
+                    <FileDown className="w-4 h-4 mr-2" />
+                    Generar Planilla
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

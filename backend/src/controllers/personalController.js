@@ -9,6 +9,10 @@ const buscar = async (req, res, next) => {
       jerarquia,
       seccion,
       estadoServicio,
+      conNotaMedica,
+      conCapacitaciones,
+      conSanciones,
+      conFechaRetiro,
       page = 1,
       limit = 20,
       sortBy = 'createdAt',
@@ -34,6 +38,14 @@ const buscar = async (req, res, next) => {
     if (jerarquia) where.jerarquia = jerarquia;
     if (seccion) where.seccion = seccion;
     if (estadoServicio) where.estadoServicio = estadoServicio;
+    if (conNotaMedica === 'true') where.notasMedicas = { some: {} };
+    if (conNotaMedica === 'false') where.notasMedicas = { none: {} };
+    if (conCapacitaciones === 'true') where.capacitaciones = { some: {} };
+    if (conCapacitaciones === 'false') where.capacitaciones = { none: {} };
+    if (conSanciones === 'true') where.sanciones = { some: {} };
+    if (conSanciones === 'false') where.sanciones = { none: {} };
+    if (conFechaRetiro === 'true') where.fechaRetiro = { not: null };
+    if (conFechaRetiro === 'false') where.fechaRetiro = null;
 
     // Consultar
     const [personal, total] = await Promise.all([
@@ -42,6 +54,27 @@ const buscar = async (req, res, next) => {
         skip,
         take,
         orderBy: { [sortBy]: sortOrder },
+        include: {
+          notasMedicas: {
+            orderBy: { fechaInicio: 'desc' },
+            take: 1,
+          },
+          capacitaciones: {
+            orderBy: { fechaInicio: 'desc' },
+            take: 1,
+          },
+          sanciones: {
+            orderBy: { fecha: 'desc' },
+            take: 1,
+          },
+          _count: {
+            select: {
+              notasMedicas: true,
+              capacitaciones: true,
+              sanciones: true,
+            },
+          },
+        },
       }),
       prisma.personal.count({ where }),
     ]);
@@ -76,6 +109,14 @@ const obtenerPorId = async (req, res, next) => {
           take: 10,
         },
         sanciones: {
+          orderBy: { fecha: 'desc' },
+          take: 10,
+        },
+        notasMedicas: {
+          orderBy: { fechaInicio: 'desc' },
+          take: 10,
+        },
+        ascensos: {
           orderBy: { fecha: 'desc' },
           take: 10,
         },
@@ -212,6 +253,12 @@ const actualizar = async (req, res, next) => {
 
     if (!anterior) {
       return res.status(404).json({ error: 'Personal no encontrado' });
+    }
+
+    // La fecha de retiro solo puede cargarse una vez: si ya está definida,
+    // se ignora cualquier intento de modificarla desde la API
+    if (anterior.fechaRetiro) {
+      delete datos.fechaRetiro;
     }
 
     // Convertir valores booleanos desde FormData (vienen como strings)
@@ -481,16 +528,23 @@ const obtenerHistorial = async (req, res, next) => {
 
 const generarPlanillas = async (req, res, next) => {
   try {
-    const { ids } = req.body;
+    const { ids, campos } = req.body;
     const pdfService = require('../services/pdfService');
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'Se requiere un array de IDs' });
     }
 
-    // Obtener personal
+    // Obtener personal con todo su historial relacionado
     const personal = await prisma.personal.findMany({
       where: { id: { in: ids.map(id => parseInt(id)) } },
+      include: {
+        licencias: { orderBy: { fechaInicio: 'desc' } },
+        notasMedicas: { orderBy: { fechaInicio: 'desc' } },
+        capacitaciones: { orderBy: { fechaInicio: 'desc' } },
+        sanciones: { orderBy: { fecha: 'desc' } },
+        ascensos: { orderBy: { fecha: 'desc' } },
+      },
     });
 
     if (personal.length === 0) {
@@ -499,7 +553,8 @@ const generarPlanillas = async (req, res, next) => {
 
     // Generar PDF
     const { filePath, fileName } = await pdfService.generarPlanillasPersonal(
-      personal
+      personal,
+      campos
     );
 
     // Enviar archivo

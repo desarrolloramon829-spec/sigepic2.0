@@ -67,6 +67,7 @@ const personalSchema = z.object({
   poseeCredencialPolicial: z.string().optional(),
   altaReparticion: z.string().optional(),
   altaDepartamental: z.string().optional(),
+  fechaRetiro: z.string().optional(),
   poseeChalecoAsignado: z.string().optional(),
   nroSerieChalecoAsignado: z.string().optional(),
 });
@@ -604,6 +605,27 @@ const PersonalNew = () => {
                     placeholder="Ciudad o localidad"
                   />
                 </div>
+
+                <div>
+                  <Label htmlFor="jurisdiccion">Jurisdicción</Label>
+                  <Input id="jurisdiccion" {...register('jurisdiccion')} />
+                </div>
+
+                <div>
+                  <Label htmlFor="regional">Regional</Label>
+                  <select
+                    id="regional"
+                    {...register('regional')}
+                    className="w-full px-3 py-2 border rounded-md bg-background"
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="CAPITAL">Capital</option>
+                    <option value="NORTE">Norte</option>
+                    <option value="SUR">Sur</option>
+                    <option value="ESTE">Este</option>
+                    <option value="OESTE">Oeste</option>
+                  </select>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
@@ -717,27 +739,6 @@ const PersonalNew = () => {
                     {...register('horarioLaboral')}
                     placeholder="Ej: 08:00 - 16:00"
                   />
-                </div>
-
-                <div>
-                  <Label htmlFor="jurisdiccion">Jurisdicción</Label>
-                  <Input id="jurisdiccion" {...register('jurisdiccion')} />
-                </div>
-
-                <div>
-                  <Label htmlFor="regional">Regional</Label>
-                  <select
-                    id="regional"
-                    {...register('regional')}
-                    className="w-full px-3 py-2 border rounded-md bg-background"
-                  >
-                    <option value="">Seleccionar...</option>
-                    <option value="CAPITAL">Capital</option>
-                    <option value="NORTE">Norte</option>
-                    <option value="SUR">Sur</option>
-                    <option value="ESTE">Este</option>
-                    <option value="OESTE">Oeste</option>
-                  </select>
                 </div>
 
                 <div>
@@ -1056,6 +1057,19 @@ const PersonalNew = () => {
                     type="date"
                     {...register('altaDepartamental')}
                   />
+                </div>
+
+                <div>
+                  <Label htmlFor="fechaRetiro">Fecha de Retiro</Label>
+                  <Input
+                    id="fechaRetiro"
+                    type="date"
+                    {...register('fechaRetiro')}
+                  />
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                    Este dato solo puede cargarse una vez; una vez guardado
+                    no podrá modificarse.
+                  </p>
                 </div>
               </CardContent>
             </Card>

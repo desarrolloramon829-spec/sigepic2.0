@@ -66,6 +66,7 @@ router.post(
 router.put(
   '/:id',
   verificarPermiso('personal', 'update'),
+  uploadPersonalCompleto,
   validarDatos(schemaPersonalActualizar),
   personalController.actualizar
 );
