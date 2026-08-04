@@ -1,6 +1,30 @@
 const prisma = require('../config/database');
 const logger = require('../utils/logger');
 
+// Categorías válidas para la carpeta con pestañas de archivos adjuntos
+const CATEGORIAS_ARCHIVO_VALIDAS = [
+  'dni',
+  'cv',
+  'certificados',
+  'constancias',
+  'otros',
+];
+
+// El frontend envía un JSON con la categoría de cada archivo, en el mismo
+// orden que los archivos subidos (ver formData.append('archivosCategorias', ...))
+const parseArchivosCategorias = raw => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(categoria =>
+      CATEGORIAS_ARCHIVO_VALIDAS.includes(categoria) ? categoria : 'otros'
+    );
+  } catch (e) {
+    return [];
+  }
+};
+
 const buscar = async (req, res, next) => {
   try {
     const {
@@ -174,15 +198,18 @@ const crear = async (req, res, next) => {
 
     // Manejar archivos adjuntos si se subieron
     if (req.files && req.files.archivos && req.files.archivos.length > 0) {
-      const archivos = req.files.archivos.map(file => ({
+      const categorias = parseArchivosCategorias(datos.archivosCategorias);
+      const archivos = req.files.archivos.map((file, index) => ({
         nombre: file.originalname,
         url: `/uploads/documentos/${file.filename}`,
         tipo: file.mimetype,
         tamano: file.size,
         fecha: new Date(),
+        categoria: categorias[index] || 'otros',
       }));
       datos.archivosAdjuntos = archivos;
     }
+    delete datos.archivosCategorias;
 
     // Manejar contactos adicionales (viene como JSON string desde FormData)
     if (datos.contactosAdicionales) {
@@ -294,24 +321,27 @@ const actualizar = async (req, res, next) => {
 
     // Manejar archivos adjuntos nuevos
     if (req.files && req.files.archivos && req.files.archivos.length > 0) {
-      const nuevosArchivos = req.files.archivos.map(file => ({
+      const categorias = parseArchivosCategorias(datos.archivosCategorias);
+      const nuevosArchivos = req.files.archivos.map((file, index) => ({
         nombre: file.originalname,
         url: `/uploads/documentos/${file.filename}`,
         tipo: file.mimetype,
         tamano: file.size,
         fecha: new Date(),
+        categoria: categorias[index] || 'otros',
       }));
-      
+
       // Combinar con archivos existentes si se desea mantenerlos
       // Nota: La lógica actual en frontend no envía los archivos existentes de vuelta,
       // solo los nuevos. Para mantener los viejos, deberíamos obtenerlos del registro anterior
       // y concatenar.
-      const archivosAnteriores = anterior.archivosAdjuntos && Array.isArray(anterior.archivosAdjuntos) 
-        ? anterior.archivosAdjuntos 
+      const archivosAnteriores = anterior.archivosAdjuntos && Array.isArray(anterior.archivosAdjuntos)
+        ? anterior.archivosAdjuntos
         : [];
-      
+
       datos.archivosAdjuntos = [...archivosAnteriores, ...nuevosArchivos];
     }
+    delete datos.archivosCategorias;
 
     // Manejar contactos adicionales (viene como JSON string desde FormData)
     if (datos.contactosAdicionales) {
@@ -477,12 +507,14 @@ const subirArchivos = async (req, res, next) => {
       return res.status(400).json({ error: 'No se proporcionaron archivos' });
     }
 
-    const archivos = req.files.map(file => ({
+    const categorias = parseArchivosCategorias(req.body.archivosCategorias);
+    const archivos = req.files.map((file, index) => ({
       nombre: file.originalname,
       url: `/uploads/documentos/${file.filename}`,
       tipo: file.mimetype,
       tamano: file.size,
       fecha: new Date(),
+      categoria: categorias[index] || 'otros',
     }));
 
     const personal = await prisma.personal.findUnique({
