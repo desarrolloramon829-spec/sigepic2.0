@@ -16,6 +16,10 @@ import {
   Phone,
   Shield,
   Camera,
+  Fingerprint,
+  GraduationCap,
+  HeartPulse,
+  FolderOpen,
 } from 'lucide-react';
 import { personalService } from '../services/personal.service';
 import { Button } from '../components/ui/button';
@@ -28,6 +32,16 @@ import {
   CardTitle,
   CardDescription,
 } from '../components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs';
+
+// Categorías de archivos adjuntos (carpeta con pestañas)
+const CATEGORIAS_ARCHIVO = [
+  { id: 'dni', label: 'DNI / Identificación', icon: Fingerprint },
+  { id: 'cv', label: 'CV / Antecedentes', icon: GraduationCap },
+  { id: 'certificados', label: 'Certificados Médicos', icon: HeartPulse },
+  { id: 'constancias', label: 'Constancias Laborales', icon: Briefcase },
+  { id: 'otros', label: 'Otros', icon: FolderOpen },
+];
 
 // Schema de validación Zod
 const personalSchema = z.object({
@@ -67,6 +81,7 @@ const personalSchema = z.object({
   poseeCredencialPolicial: z.string().optional(),
   altaReparticion: z.string().optional(),
   altaDepartamental: z.string().optional(),
+  fechaRetiro: z.string().optional(),
   poseeChalecoAsignado: z.string().optional(),
   nroSerieChalecoAsignado: z.string().optional(),
 });
@@ -78,6 +93,7 @@ const PersonalNew = () => {
   const [foto, setFoto] = useState(null);
   const [fotoPreview, setFotoPreview] = useState(null);
   const [archivos, setArchivos] = useState([]);
+  const [categoriaActiva, setCategoriaActiva] = useState(CATEGORIAS_ARCHIVO[0].id);
   const [poseeCarnet, setPoseeCarnet] = useState(false);
   const [poseeCredencial, setPoseeCredencial] = useState(false);
   const [poseeChalecoState, setPoseeChalecoState] = useState(false);
@@ -148,7 +164,7 @@ const PersonalNew = () => {
       },
     });
 
-  // Dropzone para archivos adjuntos
+  // Dropzone para archivos adjuntos (se etiquetan con la categoría/pestaña activa)
   const {
     getRootProps: getArchivosRootProps,
     getInputProps: getArchivosInputProps,
@@ -158,7 +174,10 @@ const PersonalNew = () => {
       'image/*': ['.png', '.jpg', '.jpeg'],
     },
     onDrop: acceptedFiles => {
-      setArchivos(prev => [...prev, ...acceptedFiles]);
+      setArchivos(prev => [
+        ...prev,
+        ...acceptedFiles.map(file => ({ file, categoria: categoriaActiva })),
+      ]);
     },
   });
 
@@ -201,10 +220,16 @@ const PersonalNew = () => {
         formData.append('foto', foto);
       }
 
-      // Agregar archivos
-      archivos.forEach(archivo => {
-        formData.append('archivos', archivo);
+      // Agregar archivos junto con la categoría (pestaña) de cada uno
+      archivos.forEach(({ file }) => {
+        formData.append('archivos', file);
       });
+      if (archivos.length > 0) {
+        formData.append(
+          'archivosCategorias',
+          JSON.stringify(archivos.map(a => a.categoria))
+        );
+      }
 
       // Agregar contactos adicionales
       if (contactosAdicionales.length > 0) {
@@ -604,6 +629,27 @@ const PersonalNew = () => {
                     placeholder="Ciudad o localidad"
                   />
                 </div>
+
+                <div>
+                  <Label htmlFor="jurisdiccion">Jurisdicción</Label>
+                  <Input id="jurisdiccion" {...register('jurisdiccion')} />
+                </div>
+
+                <div>
+                  <Label htmlFor="regional">Regional</Label>
+                  <select
+                    id="regional"
+                    {...register('regional')}
+                    className="w-full px-3 py-2 border rounded-md bg-background"
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="CAPITAL">Capital</option>
+                    <option value="NORTE">Norte</option>
+                    <option value="SUR">Sur</option>
+                    <option value="ESTE">Este</option>
+                    <option value="OESTE">Oeste</option>
+                  </select>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
@@ -717,27 +763,6 @@ const PersonalNew = () => {
                     {...register('horarioLaboral')}
                     placeholder="Ej: 08:00 - 16:00"
                   />
-                </div>
-
-                <div>
-                  <Label htmlFor="jurisdiccion">Jurisdicción</Label>
-                  <Input id="jurisdiccion" {...register('jurisdiccion')} />
-                </div>
-
-                <div>
-                  <Label htmlFor="regional">Regional</Label>
-                  <select
-                    id="regional"
-                    {...register('regional')}
-                    className="w-full px-3 py-2 border rounded-md bg-background"
-                  >
-                    <option value="">Seleccionar...</option>
-                    <option value="CAPITAL">Capital</option>
-                    <option value="NORTE">Norte</option>
-                    <option value="SUR">Sur</option>
-                    <option value="ESTE">Este</option>
-                    <option value="OESTE">Oeste</option>
-                  </select>
                 </div>
 
                 <div>
@@ -1057,6 +1082,19 @@ const PersonalNew = () => {
                     {...register('altaDepartamental')}
                   />
                 </div>
+
+                <div>
+                  <Label htmlFor="fechaRetiro">Fecha de Retiro</Label>
+                  <Input
+                    id="fechaRetiro"
+                    type="date"
+                    {...register('fechaRetiro')}
+                  />
+                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                    Este dato solo puede cargarse una vez; una vez guardado
+                    no podrá modificarse.
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
@@ -1071,91 +1109,134 @@ const PersonalNew = () => {
               <CardHeader className="border-b border-slate-100 dark:border-slate-800 bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-900">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-police-navy to-police-cyan flex items-center justify-center">
-                    <FileText className="w-5 h-5 text-white" />
+                    <FolderOpen className="w-5 h-5 text-white" />
                   </div>
                   <div>
                     <CardTitle className="text-xl">Archivos Adjuntos</CardTitle>
                     <CardDescription className="text-sm mt-1">
-                      Agregue documentos relacionados (opcional)
+                      Organice los documentos por categoría (opcional)
                     </CardDescription>
                   </div>
                 </div>
               </CardHeader>
               <CardContent className="pt-6">
-                <div
-                  {...getArchivosRootProps()}
-                  className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-10 text-center cursor-pointer hover:border-police-cyan hover:bg-gradient-to-br hover:from-police-cyan/5 hover:to-transparent transition-all duration-300 hover:shadow-lg"
-                >
-                  <input {...getArchivosInputProps()} />
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                      <Upload className="w-10 h-10 text-police-cyan" />
-                    </div>
-                    <div>
-                      <p className="text-base font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Click para seleccionar o arrastre archivos aquí
-                      </p>
-                      <p className="text-sm text-slate-500 dark:text-slate-400">
-                        PDF, PNG, JPG • Máximo 10MB cada uno
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <Tabs value={categoriaActiva} onValueChange={setCategoriaActiva}>
+                  <TabsList>
+                    {CATEGORIAS_ARCHIVO.map(cat => {
+                      const totalCategoria = archivos.filter(
+                        a => a.categoria === cat.id
+                      ).length;
+                      return (
+                        <TabsTrigger
+                          key={cat.id}
+                          value={cat.id}
+                          icon={cat.icon}
+                          count={totalCategoria}
+                        >
+                          {cat.label}
+                        </TabsTrigger>
+                      );
+                    })}
+                  </TabsList>
 
-                {archivos.length > 0 && (
-                  <motion.div
-                    className="mt-6 space-y-3"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                  >
-                    <div className="flex items-center gap-2 mb-4">
-                      <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
-                        <FileText className="w-4 h-4 text-green-600" />
-                      </div>
-                      <p className="text-sm font-semibold text-slate-700">
-                        {archivos.length} archivo
-                        {archivos.length > 1 ? 's' : ''} seleccionado
-                        {archivos.length > 1 ? 's' : ''}
-                      </p>
-                    </div>
-                    {archivos.map((archivo, index) => (
-                      <motion.div
-                        key={index}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.1 }}
-                        className="flex items-center justify-between p-4 bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 hover:shadow-md transition-shadow"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-lg bg-police-cyan/10 flex items-center justify-center">
-                            <FileText className="w-5 h-5 text-police-cyan" />
-                          </div>
-                          <div>
-                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                              {archivo.name}
-                            </span>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">
-                              {(archivo.size / 1024).toFixed(1)} KB
-                            </p>
+                  {CATEGORIAS_ARCHIVO.map(cat => {
+                    const archivosDeCategoria = archivos
+                      .map((a, i) => ({ ...a, _index: i }))
+                      .filter(a => a.categoria === cat.id);
+
+                    return (
+                      <TabsContent key={cat.id} value={cat.id}>
+                        <div
+                          {...getArchivosRootProps()}
+                          className="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl p-8 text-center cursor-pointer hover:border-police-cyan hover:bg-gradient-to-br hover:from-police-cyan/5 hover:to-transparent transition-all duration-300 hover:shadow-lg"
+                        >
+                          <input {...getArchivosInputProps()} />
+                          <div className="flex flex-col items-center gap-3">
+                            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                              <Upload className="w-8 h-8 text-police-cyan" />
+                            </div>
+                            <div>
+                              <p className="text-base font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                Click o arrastre aquí un archivo de{' '}
+                                {cat.label}
+                              </p>
+                              <p className="text-sm text-slate-500 dark:text-slate-400">
+                                PDF, PNG, JPG • Máximo 10MB cada uno
+                              </p>
+                            </div>
                           </div>
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            setArchivos(prev =>
-                              prev.filter((_, i) => i !== index)
-                            )
-                          }
-                          className="hover:bg-red-100 hover:text-red-700"
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </motion.div>
-                    ))}
-                  </motion.div>
-                )}
+
+                        {archivosDeCategoria.length === 0 && (
+                          <p className="mt-4 text-sm text-slate-400 dark:text-slate-500 text-center italic">
+                            Sin archivos cargados en esta categoría
+                          </p>
+                        )}
+
+                        {archivosDeCategoria.length > 0 && (
+                          <motion.div
+                            className="mt-6 space-y-3"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                          >
+                            <div className="flex items-center gap-2 mb-4">
+                              <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
+                                <FileText className="w-4 h-4 text-green-600" />
+                              </div>
+                              <p className="text-sm font-semibold text-slate-700">
+                                {archivosDeCategoria.length} archivo
+                                {archivosDeCategoria.length > 1
+                                  ? 's'
+                                  : ''}{' '}
+                                seleccionado
+                                {archivosDeCategoria.length > 1 ? 's' : ''}
+                              </p>
+                            </div>
+                            {archivosDeCategoria.map((archivo, index) => (
+                              <motion.div
+                                key={archivo._index}
+                                initial={{ opacity: 0, x: -20 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: index * 0.1 }}
+                                className="flex items-center justify-between p-4 bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 hover:shadow-md transition-shadow"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-10 h-10 rounded-lg bg-police-cyan/10 flex items-center justify-center">
+                                    <FileText className="w-5 h-5 text-police-cyan" />
+                                  </div>
+                                  <div>
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                      {archivo.file.name}
+                                    </span>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                      {(archivo.file.size / 1024).toFixed(1)}{' '}
+                                      KB
+                                    </p>
+                                  </div>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() =>
+                                    setArchivos(prev =>
+                                      prev.filter(
+                                        (_, i) => i !== archivo._index
+                                      )
+                                    )
+                                  }
+                                  className="hover:bg-red-100 hover:text-red-700"
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </motion.div>
+                            ))}
+                          </motion.div>
+                        )}
+                      </TabsContent>
+                    );
+                  })}
+                </Tabs>
               </CardContent>
             </Card>
           </motion.div>

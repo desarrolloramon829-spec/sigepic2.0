@@ -10,6 +10,10 @@ import {
   MapPin,
   Calendar,
   ClipboardList,
+  Stethoscope,
+  GraduationCap,
+  ShieldAlert,
+  Award,
 } from 'lucide-react';
 import { personalService } from '../services/personal.service';
 import { Button } from '../components/ui/button';
@@ -141,13 +145,49 @@ const PersonalDetail = () => {
                 Licencias
               </Button>
             )}
-            {hasPermission('personal', 'actualizar') && (
+            {hasPermission('read') && (
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/personal/${id}/notas-medicas`)}
+              >
+                <Stethoscope className="w-4 h-4 mr-2" />
+                Nota Médica Policial
+              </Button>
+            )}
+            {hasPermission('read') && (
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/personal/${id}/capacitaciones`)}
+              >
+                <GraduationCap className="w-4 h-4 mr-2" />
+                Capacitaciones
+              </Button>
+            )}
+            {hasPermission('read') && (
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/personal/${id}/sanciones`)}
+              >
+                <ShieldAlert className="w-4 h-4 mr-2" />
+                Sanciones
+              </Button>
+            )}
+            {hasPermission('read') && (
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/personal/${id}/ascensos`)}
+              >
+                <Award className="w-4 h-4 mr-2" />
+                Ascensos
+              </Button>
+            )}
+            {hasPermission('update') && (
               <Button onClick={() => navigate(`/personal/editar/${id}`)}>
                 <Edit className="w-4 h-4 mr-2" />
                 Editar
               </Button>
             )}
-            {hasPermission('personal', 'eliminar') && (
+            {hasPermission('delete') && (
               <Button
                 variant="destructive"
                 onClick={() => setShowDeleteDialog(true)}

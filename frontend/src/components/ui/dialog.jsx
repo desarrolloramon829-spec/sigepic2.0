@@ -3,7 +3,14 @@ import { X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Button } from './button';
 
-const Dialog = ({ open, onOpenChange, children }) => {
+const DIALOG_SIZES = {
+  lg: 'max-w-lg',
+  xl: 'max-w-xl',
+  '2xl': 'max-w-2xl',
+  '3xl': 'max-w-3xl',
+};
+
+const Dialog = ({ open, onOpenChange, children, size = 'lg' }) => {
   React.useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden';
@@ -23,7 +30,14 @@ const Dialog = ({ open, onOpenChange, children }) => {
         className="fixed inset-0 bg-black/50"
         onClick={() => onOpenChange(false)}
       />
-      <div className="relative z-50 w-full max-w-lg mx-4">{children}</div>
+      <div
+        className={cn(
+          'relative z-50 w-full mx-4',
+          DIALOG_SIZES[size] || DIALOG_SIZES.lg
+        )}
+      >
+        {children}
+      </div>
     </div>
   );
 };

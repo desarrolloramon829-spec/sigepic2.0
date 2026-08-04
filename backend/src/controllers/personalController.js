@@ -1,6 +1,30 @@
 const prisma = require('../config/database');
 const logger = require('../utils/logger');
 
+// Categorías válidas para la carpeta con pestañas de archivos adjuntos
+const CATEGORIAS_ARCHIVO_VALIDAS = [
+  'dni',
+  'cv',
+  'certificados',
+  'constancias',
+  'otros',
+];
+
+// El frontend envía un JSON con la categoría de cada archivo, en el mismo
+// orden que los archivos subidos (ver formData.append('archivosCategorias', ...))
+const parseArchivosCategorias = raw => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map(categoria =>
+      CATEGORIAS_ARCHIVO_VALIDAS.includes(categoria) ? categoria : 'otros'
+    );
+  } catch (e) {
+    return [];
+  }
+};
+
 const buscar = async (req, res, next) => {
   try {
     const {
@@ -9,6 +33,10 @@ const buscar = async (req, res, next) => {
       jerarquia,
       seccion,
       estadoServicio,
+      conNotaMedica,
+      conCapacitaciones,
+      conSanciones,
+      conFechaRetiro,
       page = 1,
       limit = 20,
       sortBy = 'createdAt',
@@ -34,6 +62,14 @@ const buscar = async (req, res, next) => {
     if (jerarquia) where.jerarquia = jerarquia;
     if (seccion) where.seccion = seccion;
     if (estadoServicio) where.estadoServicio = estadoServicio;
+    if (conNotaMedica === 'true') where.notasMedicas = { some: {} };
+    if (conNotaMedica === 'false') where.notasMedicas = { none: {} };
+    if (conCapacitaciones === 'true') where.capacitaciones = { some: {} };
+    if (conCapacitaciones === 'false') where.capacitaciones = { none: {} };
+    if (conSanciones === 'true') where.sanciones = { some: {} };
+    if (conSanciones === 'false') where.sanciones = { none: {} };
+    if (conFechaRetiro === 'true') where.fechaRetiro = { not: null };
+    if (conFechaRetiro === 'false') where.fechaRetiro = null;
 
     // Consultar
     const [personal, total] = await Promise.all([
@@ -42,6 +78,27 @@ const buscar = async (req, res, next) => {
         skip,
         take,
         orderBy: { [sortBy]: sortOrder },
+        include: {
+          notasMedicas: {
+            orderBy: { fechaInicio: 'desc' },
+            take: 1,
+          },
+          capacitaciones: {
+            orderBy: { fechaInicio: 'desc' },
+            take: 1,
+          },
+          sanciones: {
+            orderBy: { fecha: 'desc' },
+            take: 1,
+          },
+          _count: {
+            select: {
+              notasMedicas: true,
+              capacitaciones: true,
+              sanciones: true,
+            },
+          },
+        },
       }),
       prisma.personal.count({ where }),
     ]);
@@ -76,6 +133,14 @@ const obtenerPorId = async (req, res, next) => {
           take: 10,
         },
         sanciones: {
+          orderBy: { fecha: 'desc' },
+          take: 10,
+        },
+        notasMedicas: {
+          orderBy: { fechaInicio: 'desc' },
+          take: 10,
+        },
+        ascensos: {
           orderBy: { fecha: 'desc' },
           take: 10,
         },
@@ -133,15 +198,18 @@ const crear = async (req, res, next) => {
 
     // Manejar archivos adjuntos si se subieron
     if (req.files && req.files.archivos && req.files.archivos.length > 0) {
-      const archivos = req.files.archivos.map(file => ({
+      const categorias = parseArchivosCategorias(datos.archivosCategorias);
+      const archivos = req.files.archivos.map((file, index) => ({
         nombre: file.originalname,
         url: `/uploads/documentos/${file.filename}`,
         tipo: file.mimetype,
         tamano: file.size,
         fecha: new Date(),
+        categoria: categorias[index] || 'otros',
       }));
       datos.archivosAdjuntos = archivos;
     }
+    delete datos.archivosCategorias;
 
     // Manejar contactos adicionales (viene como JSON string desde FormData)
     if (datos.contactosAdicionales) {
@@ -214,6 +282,12 @@ const actualizar = async (req, res, next) => {
       return res.status(404).json({ error: 'Personal no encontrado' });
     }
 
+    // La fecha de retiro solo puede cargarse una vez: si ya está definida,
+    // se ignora cualquier intento de modificarla desde la API
+    if (anterior.fechaRetiro) {
+      delete datos.fechaRetiro;
+    }
+
     // Convertir valores booleanos desde FormData (vienen como strings)
     const booleanFields = [
       'conduceAutos',
@@ -247,24 +321,27 @@ const actualizar = async (req, res, next) => {
 
     // Manejar archivos adjuntos nuevos
     if (req.files && req.files.archivos && req.files.archivos.length > 0) {
-      const nuevosArchivos = req.files.archivos.map(file => ({
+      const categorias = parseArchivosCategorias(datos.archivosCategorias);
+      const nuevosArchivos = req.files.archivos.map((file, index) => ({
         nombre: file.originalname,
         url: `/uploads/documentos/${file.filename}`,
         tipo: file.mimetype,
         tamano: file.size,
         fecha: new Date(),
+        categoria: categorias[index] || 'otros',
       }));
-      
+
       // Combinar con archivos existentes si se desea mantenerlos
       // Nota: La lógica actual en frontend no envía los archivos existentes de vuelta,
       // solo los nuevos. Para mantener los viejos, deberíamos obtenerlos del registro anterior
       // y concatenar.
-      const archivosAnteriores = anterior.archivosAdjuntos && Array.isArray(anterior.archivosAdjuntos) 
-        ? anterior.archivosAdjuntos 
+      const archivosAnteriores = anterior.archivosAdjuntos && Array.isArray(anterior.archivosAdjuntos)
+        ? anterior.archivosAdjuntos
         : [];
-      
+
       datos.archivosAdjuntos = [...archivosAnteriores, ...nuevosArchivos];
     }
+    delete datos.archivosCategorias;
 
     // Manejar contactos adicionales (viene como JSON string desde FormData)
     if (datos.contactosAdicionales) {
@@ -430,12 +507,14 @@ const subirArchivos = async (req, res, next) => {
       return res.status(400).json({ error: 'No se proporcionaron archivos' });
     }
 
-    const archivos = req.files.map(file => ({
+    const categorias = parseArchivosCategorias(req.body.archivosCategorias);
+    const archivos = req.files.map((file, index) => ({
       nombre: file.originalname,
       url: `/uploads/documentos/${file.filename}`,
       tipo: file.mimetype,
       tamano: file.size,
       fecha: new Date(),
+      categoria: categorias[index] || 'otros',
     }));
 
     const personal = await prisma.personal.findUnique({
@@ -481,16 +560,23 @@ const obtenerHistorial = async (req, res, next) => {
 
 const generarPlanillas = async (req, res, next) => {
   try {
-    const { ids } = req.body;
+    const { ids, campos } = req.body;
     const pdfService = require('../services/pdfService');
 
     if (!ids || !Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ error: 'Se requiere un array de IDs' });
     }
 
-    // Obtener personal
+    // Obtener personal con todo su historial relacionado
     const personal = await prisma.personal.findMany({
       where: { id: { in: ids.map(id => parseInt(id)) } },
+      include: {
+        licencias: { orderBy: { fechaInicio: 'desc' } },
+        notasMedicas: { orderBy: { fechaInicio: 'desc' } },
+        capacitaciones: { orderBy: { fechaInicio: 'desc' } },
+        sanciones: { orderBy: { fecha: 'desc' } },
+        ascensos: { orderBy: { fecha: 'desc' } },
+      },
     });
 
     if (personal.length === 0) {
@@ -499,7 +585,8 @@ const generarPlanillas = async (req, res, next) => {
 
     // Generar PDF
     const { filePath, fileName } = await pdfService.generarPlanillasPersonal(
-      personal
+      personal,
+      campos
     );
 
     // Enviar archivo

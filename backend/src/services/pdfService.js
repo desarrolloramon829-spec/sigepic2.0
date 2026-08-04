@@ -336,10 +336,173 @@ class PDFService {
     }
   }
 
+  // Campos disponibles para la Ficha de Datos del Empleado Policial,
+  // agrupados por sección, en el orden en que se dibujan en el PDF
+  camposPlanillaDisponibles() {
+    return {
+      foto: true,
+      // Datos Personales
+      apellidoNombre: true,
+      dni: true,
+      cuil: true,
+      sexo: true,
+      fechaNacimiento: true,
+      estadoCivil: true,
+      nacionalidad: true,
+      grupoSanguineo: true,
+      email: true,
+      domicilio: true,
+      localidad: true,
+      domicilioAlternativo: true,
+      telefonoPersonal: true,
+      telefonoAlternativo: true,
+      contactosAdicionales: true,
+      // Datos Laborales
+      tipoPersonal: true,
+      estadoServicio: true,
+      jerarquia: true,
+      legajo: true,
+      cargo: true,
+      numeroCargo: true,
+      seccion: true,
+      funcionDepto: true,
+      horarioLaboral: true,
+      profesion: true,
+      prontuario: true,
+      jurisdiccion: true,
+      regional: true,
+      subsidioSalud: true,
+      diasLicenciaAnuales: true,
+      altaReparticion: true,
+      altaDepartamental: true,
+      fechaRetiro: true,
+      motivoBaja: true,
+      // Equipamiento y Otros
+      carnetManejo: true,
+      conduce: true,
+      poseeCredencialPolicial: true,
+      chaleco: true,
+      arma: true,
+      observaciones: true,
+      // Historial
+      licencias: true,
+      notasMedicas: true,
+      capacitaciones: true,
+      sanciones: true,
+      ascensos: true,
+    };
+  }
+
+  // Etiquetas legibles para valores de tipo/estado/aptitud del historial
+  etiquetaLicenciaTipo(tipo) {
+    return (
+      {
+        LICENCIA_ORDINARIA: 'Ordinaria',
+        LICENCIA_EXTRAORDINARIA: 'Extraordinaria',
+        LICENCIA_POR_ENFERMEDAD: 'Por Enfermedad',
+      }[tipo] || tipo
+    );
+  }
+
+  etiquetaAptitud(aptitud) {
+    return (
+      {
+        APTO: 'Apto',
+        NO_APTO: 'No Apto',
+        APTO_CON_RESTRICCIONES: 'Apto c/ Restricciones',
+      }[aptitud] || aptitud
+    );
+  }
+
+  etiquetaCapacitacionTipo(tipo) {
+    return (
+      {
+        CURSO_DE_ASCENSO: 'Curso de Ascenso',
+        ESPECIALIZACION: 'Especialización',
+        CAPACITACION_CONTINUA: 'Capacitación Continua',
+        TIRO_POLICIAL: 'Tiro Policial',
+        DERECHOS_HUMANOS: 'Derechos Humanos',
+        OTRO: 'Otro',
+      }[tipo] || tipo
+    );
+  }
+
+  etiquetaSancionTipo(tipo) {
+    return (
+      {
+        AMONESTACION: 'Amonestación',
+        APERCIBIMIENTO: 'Apercibimiento',
+        SUSPENSION: 'Suspensión',
+        ARRESTO: 'Arresto',
+        CESANTIA: 'Cesantía',
+        EXONERACION: 'Exoneración',
+      }[tipo] || tipo
+    );
+  }
+
   // Generar planillas de personal (Ficha de Datos del Empleado Policial)
-  async generarPlanillasPersonal(personalList) {
+  // camposSeleccionados: objeto { clave: boolean } indicando qué campos incluir.
+  // Si no se provee, se incluyen todos (comportamiento por defecto).
+  async generarPlanillasPersonal(personalList, camposSeleccionados = null) {
     return new Promise((resolve, reject) => {
       try {
+        const campos = {
+          ...this.camposPlanillaDisponibles(),
+          ...(camposSeleccionados || {}),
+        };
+
+        const datosPersonalesKeys = [
+          'apellidoNombre',
+          'dni',
+          'cuil',
+          'sexo',
+          'fechaNacimiento',
+          'estadoCivil',
+          'nacionalidad',
+          'grupoSanguineo',
+          'email',
+          'domicilio',
+          'localidad',
+          'domicilioAlternativo',
+          'telefonoPersonal',
+          'telefonoAlternativo',
+          'contactosAdicionales',
+        ];
+        const datosLaboralesKeys = [
+          'tipoPersonal',
+          'estadoServicio',
+          'jerarquia',
+          'legajo',
+          'cargo',
+          'numeroCargo',
+          'seccion',
+          'funcionDepto',
+          'horarioLaboral',
+          'profesion',
+          'prontuario',
+          'jurisdiccion',
+          'regional',
+          'subsidioSalud',
+          'diasLicenciaAnuales',
+          'altaReparticion',
+          'altaDepartamental',
+          'fechaRetiro',
+          'motivoBaja',
+        ];
+        const otrosKeys = [
+          'carnetManejo',
+          'conduce',
+          'poseeCredencialPolicial',
+          'chaleco',
+          'arma',
+          'observaciones',
+        ];
+        const mostrarDatosPersonales = datosPersonalesKeys.some(
+          k => campos[k]
+        );
+        const mostrarDatosLaborales = datosLaboralesKeys.some(k => campos[k]);
+        const mostrarOtros = otrosKeys.some(k => campos[k]);
+
         const fileName = `planillas_personal_${Date.now()}.pdf`;
         const filePath = path.join(this.reportsDir, fileName);
         const doc = new PDFDocument({ margin: 40, size: 'A4' }); // Margen ajustado
@@ -347,13 +510,131 @@ class PDFService {
 
         doc.pipe(stream);
 
+        const leftMargin = 50;
+        const contentWidth = doc.page.width - 100;
+        const pageBottom = doc.page.height - 55;
+
+        // Helper para líneas punteadas
+        const drawDottedLine = (x, yPos, width) => {
+          doc
+            .save()
+            .dash(1, { space: 2 })
+            .moveTo(x, yPos)
+            .lineTo(x + width, yPos)
+            .stroke()
+            .restore();
+        };
+
+        // Asegura que quede suficiente espacio en la página actual;
+        // si no, agrega una nueva página y devuelve el y reiniciado
+        const ensureSpace = (yPos, necesario) => {
+          if (yPos + necesario > pageBottom) {
+            doc.addPage();
+            return 50;
+          }
+          return yPos;
+        };
+
+        // Dibuja una fila con uno o dos campos lado a lado. Cada campo:
+        // { enabled, label, value, x, valueX, dottedWidth }
+        const drawRow = (yPos, fieldsInRow) => {
+          const habilitados = fieldsInRow.filter(f => f.enabled);
+          if (habilitados.length === 0) return yPos;
+          yPos = ensureSpace(yPos, 20);
+          habilitados.forEach(f => {
+            doc.font('Helvetica-Bold').text(f.label, f.x, yPos);
+            doc.font('Helvetica').text(f.value || '', f.valueX, yPos);
+            if (f.dottedWidth) {
+              drawDottedLine(f.valueX, yPos + 10, f.dottedWidth);
+            }
+          });
+          return yPos + 20;
+        };
+
+        // Dibuja un bloque de texto libre que puede ocupar varias líneas
+        const drawTextoLibre = (yPos, label, valor) => {
+          if (!valor) return yPos;
+          yPos = ensureSpace(yPos, 20);
+          doc.font('Helvetica-Bold').text(label, leftMargin, yPos);
+          yPos += 14;
+          yPos = ensureSpace(yPos, 20);
+          doc.font('Helvetica').text(valor, leftMargin, yPos, {
+            width: contentWidth,
+          });
+          return doc.y + 10;
+        };
+
+        // Dibuja el título de una sección en un recuadro
+        const drawTituloSeccion = (yPos, titulo) => {
+          yPos = ensureSpace(yPos, 30);
+          doc.rect(leftMargin, yPos, contentWidth, 20).stroke();
+          doc
+            .fontSize(11)
+            .font('Helvetica-Bold')
+            .text(titulo, leftMargin + 5, yPos + 5);
+          doc.fontSize(10);
+          return yPos + 30;
+        };
+
+        // Dibuja una tabla simple de historial (licencias, sanciones, etc.)
+        const drawTablaHistorial = (yPos, titulo, columnas, filas) => {
+          yPos = drawTituloSeccion(yPos, titulo);
+
+          if (filas.length === 0) {
+            doc
+              .font('Helvetica-Oblique')
+              .fontSize(9)
+              .text('Sin registros.', leftMargin, yPos);
+            doc.fontSize(10);
+            return yPos + 18;
+          }
+
+          const dibujarEncabezados = y2 => {
+            let x = leftMargin;
+            doc.font('Helvetica-Bold').fontSize(8);
+            columnas.forEach(col => {
+              doc.text(col.header, x, y2, { width: col.width });
+              x += col.width;
+            });
+            doc
+              .moveTo(leftMargin, y2 + 12)
+              .lineTo(leftMargin + contentWidth, y2 + 12)
+              .stroke();
+            return y2 + 16;
+          };
+
+          yPos = ensureSpace(yPos, 20);
+          yPos = dibujarEncabezados(yPos);
+
+          doc.font('Helvetica').fontSize(8);
+          filas.forEach(fila => {
+            if (yPos + 14 > pageBottom) {
+              doc.addPage();
+              yPos = 50;
+              yPos = dibujarEncabezados(yPos);
+              doc.font('Helvetica').fontSize(8);
+            }
+            let x = leftMargin;
+            columnas.forEach(col => {
+              doc.text(String(col.valor(fila) ?? ''), x, yPos, {
+                width: col.width,
+              });
+              x += col.width;
+            });
+            yPos += 14;
+          });
+
+          doc.fontSize(10);
+          return yPos + 16;
+        };
+
         personalList.forEach((personal, index) => {
           if (index > 0) doc.addPage();
 
           // --- ENCABEZADO ---
           // Nota: Como no tengo los escudos exactos, usaré espacios o texto.
           // Si tuvieras los logos en assets, se cargarían aquí.
-          
+
           doc
             .fontSize(14)
             .font('Helvetica-Bold')
@@ -365,200 +646,592 @@ class PDFService {
 
           doc
             .fontSize(12)
-            .text('FICHA DE DATOS DEL EMPLEADO POLICIAL', { align: 'center', underline: true });
-            
+            .text('FICHA DE DATOS DEL EMPLEADO POLICIAL', {
+              align: 'center',
+              underline: true,
+            });
+
           doc.moveDown(1);
 
+          let y;
+
           // --- RECUADRO FOTO ---
-          const photoX = (doc.page.width - 120) / 2; // Centrado
-          const photoY = doc.y;
-          const photoWidth = 120;
-          const photoHeight = 140;
+          if (campos.foto) {
+            const photoX = (doc.page.width - 120) / 2; // Centrado
+            const photoY = doc.y;
+            const photoWidth = 120;
+            const photoHeight = 140;
 
-          // Dibujar recuadro
-          doc.rect(photoX, photoY, photoWidth, photoHeight).stroke();
+            doc.rect(photoX, photoY, photoWidth, photoHeight).stroke();
 
-          // Cargar foto si existe
-          if (personal.fotoUrl) {
-            try {
-              const photoPath = path.join(
-                __dirname,
-                '../../uploads',
-                personal.fotoUrl.replace('/uploads/', '')
-              );
-              if (fs.existsSync(photoPath)) {
-                doc.image(photoPath, photoX + 1, photoY + 1, {
-                  width: photoWidth - 2,
-                  height: photoHeight - 2,
-                  fit: [photoWidth - 2, photoHeight - 2],
-                });
+            if (personal.fotoUrl) {
+              try {
+                const photoPath = path.join(
+                  __dirname,
+                  '../../uploads',
+                  personal.fotoUrl.replace('/uploads/', '')
+                );
+                if (fs.existsSync(photoPath)) {
+                  doc.image(photoPath, photoX + 1, photoY + 1, {
+                    width: photoWidth - 2,
+                    height: photoHeight - 2,
+                    fit: [photoWidth - 2, photoHeight - 2],
+                  });
+                }
+              } catch (err) {
+                console.error('Error al cargar foto:', err);
               }
-            } catch (err) {
-              console.error('Error al cargar foto:', err);
             }
+
+            y = photoY + photoHeight + 30;
+          } else {
+            y = doc.y + 10;
           }
 
-          let y = photoY + photoHeight + 30;
-          const leftMargin = 50;
-          const contentWidth = doc.page.width - 100;
+          doc.fontSize(10);
 
           // --- DATOS PERSONALES ---
-          // Dibujar recuadro de título
-          doc.rect(leftMargin, y, contentWidth, 20).stroke();
-          doc.fontSize(11).font('Helvetica-Bold').text('DATOS PERSONALES', leftMargin + 5, y + 5);
-          
-          y += 30;
-          doc.fontSize(10);
+          if (mostrarDatosPersonales) {
+            y = drawTituloSeccion(y, 'DATOS PERSONALES');
 
-          // Helper para líneas punteadas
-          const drawDottedLine = (x, y, width) => {
-            doc.save()
-               .dash(1, { space: 2 })
-               .moveTo(x, y)
-               .lineTo(x + width, y)
-               .stroke()
-               .restore();
-          };
+            const nameValue = `${personal.apellidos}, ${personal.nombres}`.toUpperCase();
+            y = drawRow(y, [
+              {
+                enabled: campos.apellidoNombre,
+                label: 'Apellido y Nombre:',
+                value: nameValue,
+                x: leftMargin,
+                valueX: leftMargin + 110,
+                dottedWidth: contentWidth - 110,
+              },
+            ]);
 
-          // Apellido y Nombre
-          doc.font('Helvetica-Bold').text('Apellido y Nombre:', leftMargin, y);
-          const nameValue = `${personal.apellidos}, ${personal.nombres}`.toUpperCase();
-          doc.font('Helvetica').text(nameValue, leftMargin + 110, y);
-          drawDottedLine(leftMargin + 110, y + 10, contentWidth - 110);
-          
-          y += 20;
-          // Nro. De prontuario
-          doc.font('Helvetica-Bold').text('Nro. De prontuario:', leftMargin, y);
-          const prontuarioValue = personal.prontuario || '';
-          doc.font('Helvetica').text(prontuarioValue, leftMargin + 110, y);
-          drawDottedLine(leftMargin + 110, y + 10, 150);
+            y = drawRow(y, [
+              {
+                enabled: campos.dni,
+                label: 'DNI:',
+                value: personal.dni,
+                x: leftMargin,
+                valueX: leftMargin + 30,
+                dottedWidth: 150,
+              },
+              {
+                enabled: campos.cuil,
+                label: 'CUIT / CUIL:',
+                value: personal.cuil,
+                x: leftMargin + 200,
+                valueX: leftMargin + 280,
+                dottedWidth: 150,
+              },
+            ]);
 
-          y += 20;
-          // Jerarquía y Legajo Personal
-          doc.font('Helvetica-Bold').text('Jerarquía:', leftMargin, y);
-          doc.font('Helvetica').text(personal.jerarquia || '', leftMargin + 60, y);
-          drawDottedLine(leftMargin + 60, y + 10, 180);
+            y = drawRow(y, [
+              {
+                enabled: campos.sexo,
+                label: 'Sexo:',
+                value:
+                  personal.sexo === 'M'
+                    ? 'Masculino'
+                    : personal.sexo === 'F'
+                      ? 'Femenino'
+                      : personal.sexo,
+                x: leftMargin,
+                valueX: leftMargin + 45,
+                dottedWidth: 150,
+              },
+              {
+                enabled: campos.estadoCivil,
+                label: 'Estado Civil:',
+                value: personal.estadoCivil,
+                x: leftMargin + 220,
+                valueX: leftMargin + 300,
+                dottedWidth: 130,
+              },
+            ]);
 
-          doc.font('Helvetica-Bold').text('Legajo Personal:', leftMargin + 250, y);
-          doc.font('Helvetica').text(personal.numeroAsignacion || '', leftMargin + 350, y);
-          drawDottedLine(leftMargin + 350, y + 10, 150);
+            y = drawRow(y, [
+              {
+                enabled: campos.fechaNacimiento,
+                label: 'Fecha de Nacimiento:',
+                value: this.formatDate(personal.fechaNacimiento),
+                x: leftMargin,
+                valueX: leftMargin + 120,
+                dottedWidth: 120,
+              },
+              {
+                enabled: campos.nacionalidad,
+                label: 'Nacionalidad:',
+                value: personal.nacionalidad || 'ARGENTINA',
+                x: leftMargin + 260,
+                valueX: leftMargin + 340,
+                dottedWidth: 150,
+              },
+            ]);
 
-          y += 20;
-          // Pertenece a División/Sección
-          doc.font('Helvetica-Bold').text('Pertenece a División/Sección:', leftMargin, y);
-          doc.font('Helvetica').text(personal.seccion || '', leftMargin + 170, y);
-          drawDottedLine(leftMargin + 170, y + 10, contentWidth - 170);
+            y = drawRow(y, [
+              {
+                enabled: campos.grupoSanguineo,
+                label: 'Grupo Sanguineo:',
+                value: personal.grupoSanguineo,
+                x: leftMargin,
+                valueX: leftMargin + 100,
+                dottedWidth: 150,
+              },
+              {
+                enabled: campos.email,
+                label: 'Email:',
+                value: personal.email,
+                x: leftMargin + 260,
+                valueX: leftMargin + 310,
+                dottedWidth: 180,
+              },
+            ]);
 
-          y += 20;
-          // DNI y CUIT/CUIL
-          doc.font('Helvetica-Bold').text('DNI:', leftMargin, y);
-          doc.font('Helvetica').text(personal.dni || '', leftMargin + 30, y);
-          drawDottedLine(leftMargin + 30, y + 10, 150);
+            y = drawRow(y, [
+              {
+                enabled: campos.domicilio,
+                label: 'Domicilio:',
+                value: personal.domicilio,
+                x: leftMargin,
+                valueX: leftMargin + 60,
+                dottedWidth: 250,
+              },
+              {
+                enabled: campos.localidad,
+                label: 'Localidad:',
+                value: personal.localidad || 'TUCUMÁN',
+                x: leftMargin + 320,
+                valueX: leftMargin + 380,
+                dottedWidth: 120,
+              },
+            ]);
 
-          doc.font('Helvetica-Bold').text('CUIT / CUIL:', leftMargin + 200, y);
-          doc.font('Helvetica').text(personal.cuil || '', leftMargin + 280, y);
-          drawDottedLine(leftMargin + 280, y + 10, 150);
+            y = drawRow(y, [
+              {
+                enabled: campos.domicilioAlternativo,
+                label: 'Domicilio Alternativo:',
+                value: '',
+                x: leftMargin,
+                valueX: leftMargin + 120,
+                dottedWidth: contentWidth - 120,
+              },
+            ]);
 
-          y += 20;
-          // Fecha de Nacimiento y Nacionalidad
-          doc.font('Helvetica-Bold').text('Fecha de Nacimiento:', leftMargin, y);
-          doc.font('Helvetica').text(this.formatDate(personal.fechaNacimiento), leftMargin + 120, y);
-          drawDottedLine(leftMargin + 120, y + 10, 120);
+            y = drawRow(y, [
+              {
+                enabled: campos.telefonoPersonal,
+                label: 'Teléfono Personal:',
+                value: personal.celular,
+                x: leftMargin,
+                valueX: leftMargin + 100,
+                dottedWidth: 150,
+              },
+              {
+                enabled: campos.telefonoAlternativo,
+                label: 'Teléfono Alternativo:',
+                value: personal.telefonoFijo,
+                x: leftMargin + 260,
+                valueX: leftMargin + 370,
+                dottedWidth: 130,
+              },
+            ]);
 
-          doc.font('Helvetica-Bold').text('Nacionalidad:', leftMargin + 260, y);
-          doc.font('Helvetica').text(personal.nacionalidad || 'ARGENTINA', leftMargin + 340, y);
-          drawDottedLine(leftMargin + 340, y + 10, 150);
+            if (
+              campos.contactosAdicionales &&
+              Array.isArray(personal.contactosAdicionales) &&
+              personal.contactosAdicionales.length > 0
+            ) {
+              y = ensureSpace(y, 20);
+              doc
+                .font('Helvetica-Bold')
+                .text('Contactos Adicionales:', leftMargin, y);
+              y += 14;
+              personal.contactosAdicionales.forEach(c => {
+                y = ensureSpace(y, 14);
+                doc
+                  .font('Helvetica')
+                  .text(`- ${c.tipo}: ${c.valor}`, leftMargin + 10, y);
+                y += 14;
+              });
+            }
 
-          y += 20;
-          // Domicilio y Localidad
-          doc.font('Helvetica-Bold').text('Domicilio:', leftMargin, y);
-          doc.font('Helvetica').text(personal.domicilio || '', leftMargin + 60, y);
-          drawDottedLine(leftMargin + 60, y + 10, 250);
+            y += 15;
+          }
 
-          doc.font('Helvetica-Bold').text('Localidad:', leftMargin + 320, y);
-          doc.font('Helvetica').text(personal.localidad || 'TUCUMÁN', leftMargin + 380, y);
-          drawDottedLine(leftMargin + 380, y + 10, 120);
+          // --- DATOS LABORALES ---
+          if (mostrarDatosLaborales) {
+            y = drawTituloSeccion(y, 'DATOS LABORALES');
 
-          y += 20;
-          // Domicilio Alternativo
-          doc.font('Helvetica-Bold').text('Domicilio Alternativo:', leftMargin, y);
-          doc.font('Helvetica').text('', leftMargin + 120, y); // Campo vacío por defecto si no existe en BD
-          drawDottedLine(leftMargin + 120, y + 10, contentWidth - 120);
+            y = drawRow(y, [
+              {
+                enabled: campos.tipoPersonal,
+                label: 'Tipo de Personal:',
+                value: personal.tipoPersonal,
+                x: leftMargin,
+                valueX: leftMargin + 110,
+                dottedWidth: 150,
+              },
+              {
+                enabled: campos.estadoServicio,
+                label: 'Estado de Servicio:',
+                value: personal.estadoServicio,
+                x: leftMargin + 280,
+                valueX: leftMargin + 400,
+                dottedWidth: 90,
+              },
+            ]);
 
-          y += 20;
-          // Grupo Sanguineo
-          doc.font('Helvetica-Bold').text('Grupo Sanguineo:', leftMargin, y);
-          doc.font('Helvetica').text(personal.grupoSanguineo || '', leftMargin + 100, y);
-          drawDottedLine(leftMargin + 100, y + 10, 150);
+            y = drawRow(y, [
+              {
+                enabled: campos.jerarquia,
+                label: 'Jerarquía:',
+                value: personal.jerarquia,
+                x: leftMargin,
+                valueX: leftMargin + 60,
+                dottedWidth: 180,
+              },
+              {
+                enabled: campos.legajo,
+                label: 'Legajo Personal:',
+                value: personal.numeroAsignacion,
+                x: leftMargin + 250,
+                valueX: leftMargin + 350,
+                dottedWidth: 150,
+              },
+            ]);
 
-          y += 20;
-          // Teléfono Personal y Alternativo
-          doc.font('Helvetica-Bold').text('Teléfono Personal:', leftMargin, y);
-          doc.font('Helvetica').text(personal.celular || '', leftMargin + 100, y);
-          drawDottedLine(leftMargin + 100, y + 10, 150);
+            y = drawRow(y, [
+              {
+                enabled: campos.cargo,
+                label: 'Cargo:',
+                value: personal.cargo,
+                x: leftMargin,
+                valueX: leftMargin + 50,
+                dottedWidth: 190,
+              },
+              {
+                enabled: campos.numeroCargo,
+                label: 'N° de Cargo:',
+                value: personal.numeroCargo,
+                x: leftMargin + 250,
+                valueX: leftMargin + 330,
+                dottedWidth: 170,
+              },
+            ]);
 
-          doc.font('Helvetica-Bold').text('Teléfono Alternativo:', leftMargin + 260, y);
-          doc.font('Helvetica').text(personal.telefonoFijo || '', leftMargin + 370, y);
-          drawDottedLine(leftMargin + 370, y + 10, 130);
+            y = drawRow(y, [
+              {
+                enabled: campos.seccion,
+                label: 'Pertenece a División/Sección:',
+                value: personal.seccion,
+                x: leftMargin,
+                valueX: leftMargin + 170,
+                dottedWidth: contentWidth - 170,
+              },
+            ]);
 
-          y += 40;
+            y = drawRow(y, [
+              {
+                enabled: campos.funcionDepto,
+                label: 'Función en Departamento:',
+                value: personal.funcionDepto,
+                x: leftMargin,
+                valueX: leftMargin + 155,
+                dottedWidth: contentWidth - 155,
+              },
+            ]);
 
-          // --- OTROS ---
-          doc.rect(leftMargin, y, contentWidth, 20).stroke();
-          doc.fontSize(11).font('Helvetica-Bold').text('OTROS', leftMargin + 5, y + 5);
-          
-          y += 30;
-          doc.fontSize(10);
+            y = drawRow(y, [
+              {
+                enabled: campos.horarioLaboral,
+                label: 'Horario Laboral:',
+                value: personal.horarioLaboral,
+                x: leftMargin,
+                valueX: leftMargin + 95,
+                dottedWidth: 165,
+              },
+              {
+                enabled: campos.profesion,
+                label: 'Profesión:',
+                value: personal.profesion,
+                x: leftMargin + 280,
+                valueX: leftMargin + 340,
+                dottedWidth: 150,
+              },
+            ]);
 
-          // Carnet de Manejo
-          doc.font('Helvetica-Bold').text('Carnet de Manejo posee:', leftMargin, y);
-          const poseeCarnet = personal.poseeCarnetManejo ? 'SI' : 'NO';
-          doc.font('Helvetica').text(`SI   /   NO    (${poseeCarnet})`, leftMargin + 130, y);
+            y = drawRow(y, [
+              {
+                enabled: campos.prontuario,
+                label: 'Nro. De prontuario:',
+                value: personal.prontuario,
+                x: leftMargin,
+                valueX: leftMargin + 110,
+                dottedWidth: 150,
+              },
+            ]);
 
-          y += 20;
-          // Conduce
-          doc.font('Helvetica-Bold').text('Conduce:', leftMargin, y);
-          
-          // Checkboxes simulados
-          const checkAuto = personal.conduceAutos ? '[ X ]' : '[   ]';
-          const checkMoto = personal.conduceMotos ? '[ X ]' : '[   ]';
-          const checkOtros = personal.conduceOtros ? '[ X ]' : '[   ]';
+            y = drawRow(y, [
+              {
+                enabled: campos.jurisdiccion,
+                label: 'Jurisdicción:',
+                value: personal.jurisdiccion,
+                x: leftMargin,
+                valueX: leftMargin + 75,
+                dottedWidth: 165,
+              },
+              {
+                enabled: campos.regional,
+                label: 'Regional:',
+                value: personal.regional,
+                x: leftMargin + 280,
+                valueX: leftMargin + 335,
+                dottedWidth: 155,
+              },
+            ]);
 
-          doc.font('Helvetica').text(`Autos ${checkAuto}`, leftMargin + 60, y);
-          doc.text(`Motos ${checkMoto}`, leftMargin + 140, y);
-          doc.text(`Otros ${checkOtros}`, leftMargin + 220, y);
+            y = drawRow(y, [
+              {
+                enabled: campos.subsidioSalud,
+                label: 'Subsidio de Salud:',
+                value: personal.subsidioSalud,
+                x: leftMargin,
+                valueX: leftMargin + 105,
+                dottedWidth: 155,
+              },
+              {
+                enabled: campos.diasLicenciaAnuales,
+                label: 'Días Licencia Anuales:',
+                value:
+                  personal.diasLicenciaAnuales !== null &&
+                  personal.diasLicenciaAnuales !== undefined
+                    ? String(personal.diasLicenciaAnuales)
+                    : '',
+                x: leftMargin + 280,
+                valueX: leftMargin + 420,
+                dottedWidth: 70,
+              },
+            ]);
 
-          y += 20;
-          // Alta de Repartición
-          doc.font('Helvetica-Bold').text('Alta de Repartición:', leftMargin, y);
-          doc.font('Helvetica').text(this.formatDate(personal.altaReparticion) || '', leftMargin + 110, y);
-          drawDottedLine(leftMargin + 110, y + 10, 200);
+            y = drawRow(y, [
+              {
+                enabled: campos.altaReparticion,
+                label: 'Alta de Repartición:',
+                value: this.formatDate(personal.altaReparticion),
+                x: leftMargin,
+                valueX: leftMargin + 110,
+                dottedWidth: 200,
+              },
+            ]);
 
-          y += 20;
-          // Alta Departamental
-          doc.font('Helvetica-Bold').text('Alta Departamental:', leftMargin, y);
-          doc.font('Helvetica').text(this.formatDate(personal.altaDependencia) || '', leftMargin + 110, y);
-          drawDottedLine(leftMargin + 110, y + 10, 200);
+            y = drawRow(y, [
+              {
+                enabled: campos.altaDepartamental,
+                label: 'Alta Departamental:',
+                value: this.formatDate(personal.altaDepartamental),
+                x: leftMargin,
+                valueX: leftMargin + 110,
+                dottedWidth: 200,
+              },
+            ]);
 
-          y += 20;
-          // Chaleco Provisto
-          doc.font('Helvetica-Bold').text('Chaleco Provisto:', leftMargin, y);
-          const poseeChaleco = personal.poseeChalecoAsignado ? 'SI' : 'NO';
-          doc.font('Helvetica').text(`SI   /   NO    (${poseeChaleco})`, leftMargin + 100, y);
+            y = drawRow(y, [
+              {
+                enabled: campos.fechaRetiro,
+                label: 'Fecha de Retiro:',
+                value: this.formatDate(personal.fechaRetiro),
+                x: leftMargin,
+                valueX: leftMargin + 95,
+                dottedWidth: 165,
+              },
+            ]);
 
-          doc.font('Helvetica-Bold').text('N° de Serie:', leftMargin + 250, y);
-          // Asumiendo que no hay campo específico para serie de chaleco en el modelo actual, dejo espacio
-          drawDottedLine(leftMargin + 320, y + 10, 150);
+            y = drawTextoLibre(y, 'Motivo de Baja:', campos.motivoBaja ? personal.motivoBaja : null);
 
-          y += 20;
-          // Arma provista
-          doc.font('Helvetica-Bold').text('Arma provista: Marca:', leftMargin, y);
-          doc.font('Helvetica').text(personal.armaTipo || '', leftMargin + 120, y);
-          drawDottedLine(leftMargin + 120, y + 10, 150);
+            y += 5;
+          }
 
-          doc.font('Helvetica-Bold').text('N° de Serie:', leftMargin + 280, y);
-          doc.font('Helvetica').text(personal.nroArma || '', leftMargin + 350, y);
-          drawDottedLine(leftMargin + 350, y + 10, 150);
+          // --- EQUIPAMIENTO Y OTROS ---
+          if (mostrarOtros) {
+            y = drawTituloSeccion(y, 'EQUIPAMIENTO Y OTROS');
+
+            if (campos.carnetManejo) {
+              y = ensureSpace(y, 20);
+              doc
+                .font('Helvetica-Bold')
+                .text('Carnet de Manejo posee:', leftMargin, y);
+              const poseeCarnet = personal.poseeCarnetManejo ? 'SI' : 'NO';
+              doc
+                .font('Helvetica')
+                .text(`SI   /   NO    (${poseeCarnet})`, leftMargin + 130, y);
+              y += 20;
+            }
+
+            if (campos.conduce) {
+              y = ensureSpace(y, 20);
+              doc.font('Helvetica-Bold').text('Conduce:', leftMargin, y);
+              const checkAuto = personal.conduceAutos ? '[ X ]' : '[   ]';
+              const checkMoto = personal.conduceMotos ? '[ X ]' : '[   ]';
+              const checkOtros = personal.conduceOtros ? '[ X ]' : '[   ]';
+              doc
+                .font('Helvetica')
+                .text(`Autos ${checkAuto}`, leftMargin + 60, y);
+              doc.text(`Motos ${checkMoto}`, leftMargin + 140, y);
+              doc.text(`Otros ${checkOtros}`, leftMargin + 220, y);
+              y += 20;
+            }
+
+            if (campos.poseeCredencialPolicial) {
+              y = ensureSpace(y, 20);
+              doc
+                .font('Helvetica-Bold')
+                .text('Credencial Policial posee:', leftMargin, y);
+              const poseeCredencial = personal.poseeCredencialPolicial
+                ? 'SI'
+                : 'NO';
+              doc
+                .font('Helvetica')
+                .text(
+                  `SI   /   NO    (${poseeCredencial})`,
+                  leftMargin + 145,
+                  y
+                );
+              y += 20;
+            }
+
+            if (campos.chaleco) {
+              y = ensureSpace(y, 20);
+              doc
+                .font('Helvetica-Bold')
+                .text('Chaleco Provisto:', leftMargin, y);
+              const poseeChaleco = personal.poseeChalecoAsignado
+                ? 'SI'
+                : 'NO';
+              doc
+                .font('Helvetica')
+                .text(`SI   /   NO    (${poseeChaleco})`, leftMargin + 100, y);
+
+              doc
+                .font('Helvetica-Bold')
+                .text('N° de Serie:', leftMargin + 250, y);
+              doc
+                .font('Helvetica')
+                .text(
+                  personal.nroSerieChalecoAsignado || '',
+                  leftMargin + 320,
+                  y
+                );
+              drawDottedLine(leftMargin + 320, y + 10, 150);
+              y += 20;
+            }
+
+            if (campos.arma) {
+              y = ensureSpace(y, 20);
+              doc
+                .font('Helvetica-Bold')
+                .text('Arma provista: Marca:', leftMargin, y);
+              doc
+                .font('Helvetica')
+                .text(personal.armaTipo || '', leftMargin + 120, y);
+              drawDottedLine(leftMargin + 120, y + 10, 150);
+
+              doc
+                .font('Helvetica-Bold')
+                .text('N° de Serie:', leftMargin + 280, y);
+              doc
+                .font('Helvetica')
+                .text(personal.nroArma || '', leftMargin + 350, y);
+              drawDottedLine(leftMargin + 350, y + 10, 150);
+              y += 20;
+            }
+
+            y = drawTextoLibre(
+              y,
+              'Observaciones:',
+              campos.observaciones ? personal.observaciones : null
+            );
+          }
+
+          // --- HISTORIAL: LICENCIAS ---
+          if (campos.licencias) {
+            y = drawTablaHistorial(
+              y,
+              'LICENCIAS',
+              [
+                { header: 'Tipo', width: 110, valor: r => this.etiquetaLicenciaTipo(r.tipo) },
+                { header: 'Desde', width: 65, valor: r => this.formatDate(r.fechaInicio) },
+                { header: 'Hasta', width: 65, valor: r => this.formatDate(r.fechaFin) },
+                { header: 'Días', width: 40, valor: r => r.dias },
+                { header: 'Motivo', width: 130, valor: r => r.motivo || '' },
+                { header: 'Estado', width: 85, valor: r => r.estado },
+              ],
+              personal.licencias || []
+            );
+          }
+
+          // --- HISTORIAL: NOTAS MÉDICAS ---
+          if (campos.notasMedicas) {
+            y = drawTablaHistorial(
+              y,
+              'NOTAS MÉDICAS POLICIALES',
+              [
+                { header: 'Desde', width: 65, valor: r => this.formatDate(r.fechaInicio) },
+                { header: 'Días', width: 40, valor: r => r.dias },
+                { header: 'Hasta', width: 65, valor: r => this.formatDate(r.fechaFin) },
+                { header: 'Extensión', width: 60, valor: r => (r.diasExtension > 0 ? `+${r.diasExtension}d` : '-') },
+                { header: 'Aptitud', width: 110, valor: r => this.etiquetaAptitud(r.aptitud) },
+                { header: 'Estado', width: 95, valor: r => r.estado },
+              ],
+              personal.notasMedicas || []
+            );
+          }
+
+          // --- HISTORIAL: CAPACITACIONES ---
+          if (campos.capacitaciones) {
+            y = drawTablaHistorial(
+              y,
+              'CAPACITACIONES',
+              [
+                { header: 'Tipo', width: 100, valor: r => this.etiquetaCapacitacionTipo(r.tipo) },
+                { header: 'Nombre', width: 140, valor: r => r.nombre },
+                { header: 'Institución', width: 110, valor: r => r.institucion },
+                { header: 'Fecha', width: 65, valor: r => this.formatDate(r.fechaInicio) },
+                { header: 'Estado', width: 80, valor: r => r.estado },
+              ],
+              personal.capacitaciones || []
+            );
+          }
+
+          // --- HISTORIAL: SANCIONES ---
+          if (campos.sanciones) {
+            y = drawTablaHistorial(
+              y,
+              'SANCIONES',
+              [
+                { header: 'Tipo', width: 100, valor: r => this.etiquetaSancionTipo(r.tipo) },
+                { header: 'Fecha', width: 60, valor: r => this.formatDate(r.fecha) },
+                { header: 'Motivo', width: 180, valor: r => r.motivo },
+                { header: 'Días', width: 40, valor: r => r.diasSuspension || '-' },
+                { header: 'Estado', width: 115, valor: r => r.estado },
+              ],
+              personal.sanciones || []
+            );
+          }
+
+          // --- HISTORIAL: ASCENSOS ---
+          if (campos.ascensos) {
+            y = drawTablaHistorial(
+              y,
+              'ASCENSOS',
+              [
+                { header: 'Fecha', width: 70, valor: r => this.formatDate(r.fecha) },
+                { header: 'Ascendió a', width: 160, valor: r => r.jerarquia },
+                { header: 'Resolución', width: 130, valor: r => r.resolucion || '' },
+                { header: 'Estado', width: 135, valor: r => r.estado },
+              ],
+              personal.ascensos || []
+            );
+          }
 
           // Pie de página
           doc

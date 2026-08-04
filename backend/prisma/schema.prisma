@@ -61,6 +61,7 @@ model Personal {
   altaDepartamental       String?        @map("alta_departamental") @db.VarChar(50)
   bajaDependencia         DateTime?      @map("baja_dependencia") @db.Date
   motivoBaja              String?        @map("motivo_baja")
+  fechaRetiro             String?        @map("fecha_retiro") @db.VarChar(50)
   estadoServicio          String         @default("ACTIVO") @map("estado_servicio") @db.VarChar(20)
   horarioLaboral          String?        @map("horario_laboral") @db.VarChar(100)
   profesion               String?        @db.VarChar(100)
@@ -93,6 +94,8 @@ model Personal {
   licencias               Licencia[]
   usuario                 Usuario?       @relation(fields: [createdBy], references: [id])
   sanciones               Sancion[]
+  notasMedicas            NotaMedica[]
+  ascensos                Ascenso[]
 
   @@index([dni])
   @@index([numeroAsignacion])
@@ -201,6 +204,7 @@ model Licencia {
 model Capacitacion {
   id             Int       @id @default(autoincrement())
   personalId     Int       @map("personal_id")
+  tipo           String    @db.VarChar(50)
   nombre         String    @db.VarChar(200)
   institucion    String    @db.VarChar(200)
   fechaInicio    DateTime  @map("fecha_inicio") @db.Date
@@ -215,6 +219,7 @@ model Capacitacion {
   personal       Personal  @relation(fields: [personalId], references: [id], onDelete: Cascade)
 
   @@index([personalId])
+  @@index([tipo])
   @@index([estado])
   @@map("capacitaciones")
 }
@@ -238,6 +243,50 @@ model Sancion {
   @@index([fecha])
   @@index([estado])
   @@map("sanciones")
+}
+
+model NotaMedica {
+  id                Int       @id @default(autoincrement())
+  personalId        Int       @map("personal_id")
+  fechaInicio       DateTime  @map("fecha_inicio") @db.Date
+  dias              Int
+  fechaFin          DateTime  @map("fecha_fin") @db.Date
+  diasExtension     Int?      @default(0) @map("dias_extension")
+  fechaFinExtendida DateTime? @map("fecha_fin_extendida") @db.Date
+  aptitud           String    @db.VarChar(30)
+  diagnostico       String?
+  medico            String?   @db.VarChar(150)
+  documentoUrl      String?   @map("documento_url") @db.VarChar(255)
+  observaciones     String?
+  estado            String    @default("VIGENTE") @db.VarChar(20)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  personal          Personal  @relation(fields: [personalId], references: [id], onDelete: Cascade)
+
+  @@index([personalId])
+  @@index([fechaInicio])
+  @@index([aptitud])
+  @@index([estado])
+  @@map("notas_medicas")
+}
+
+model Ascenso {
+  id            Int      @id @default(autoincrement())
+  personalId    Int      @map("personal_id")
+  fecha         DateTime @db.Date
+  jerarquia     String   @db.VarChar(50)
+  resolucion    String?  @db.VarChar(100)
+  documentoUrl  String?  @map("documento_url") @db.VarChar(255)
+  observaciones String?
+  estado        String   @default("VIGENTE") @db.VarChar(20)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  personal      Personal @relation(fields: [personalId], references: [id], onDelete: Cascade)
+
+  @@index([personalId])
+  @@index([fecha])
+  @@index([estado])
+  @@map("ascensos")
 }
 
 model Configuracion {
