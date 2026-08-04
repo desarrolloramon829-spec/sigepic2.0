@@ -81,6 +81,7 @@ const PersonalEdit = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [personal, setPersonal] = useState(null);
   const [foto, setFoto] = useState(null);
   const [fotoPreview, setFotoPreview] = useState(null);
   const [archivos, setArchivos] = useState([]);
@@ -154,6 +155,7 @@ const PersonalEdit = () => {
       setLoading(true);
       const response = await personalService.getById(id);
       const personal = response.data;
+      setPersonal(personal);
 
       // Poblar formulario con datos existentes
       reset({
